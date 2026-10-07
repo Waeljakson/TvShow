@@ -29,6 +29,7 @@ function ensureConfig() {
     imageDuration: 10,
     order: [],
     imageDurations: {},
+    schedules: [],
     reconnectSeconds: 5
   };
   if (fs.existsSync(EXAMPLE_FILE)) {
@@ -49,6 +50,7 @@ function loadConfig() {
     imageDuration: Math.min(3600, Math.max(1, Number(raw.imageDuration || 10))),
     order: Array.isArray(raw.order) ? raw.order.map(String) : [],
     imageDurations: raw.imageDurations && typeof raw.imageDurations === "object" ? raw.imageDurations : {},
+    schedules: Array.isArray(raw.schedules) ? raw.schedules : [],
     reconnectSeconds: Math.min(60, Math.max(2, Number(raw.reconnectSeconds || 5)))
   };
 }
@@ -163,7 +165,8 @@ function sendPlaylist(force = false) {
     items,
     settings: {
       mediaDir: config.mediaDir,
-      imageDuration: config.imageDuration
+      imageDuration: config.imageDuration,
+      schedules: config.schedules
     }
   });
 }
@@ -314,6 +317,36 @@ function handleCommand(msg) {
       lastSignature = "";
       sendPlaylist(true);
       return commandResult(requestId, true);
+    }
+
+    if (action === "set-schedules") {
+      const list = Array.isArray(data.schedules) ? data.schedules : null;
+      if (!list) return commandResult(requestId, false, {}, "invalid_schedules");
+
+      const cleaned = [];
+      for (const item of list.slice(0, 100)) {
+        const scheduleId = String(item?.id || "").trim();
+        const title = String(item?.title || "").trim().slice(0, 120);
+        const url = String(item?.url || "").trim();
+        const start = String(item?.start || "").trim();
+        const end = String(item?.end || "").trim();
+        if (!scheduleId || !/^https?:\/\//i.test(url)) {
+          return commandResult(requestId, false, {}, "invalid_schedule_url");
+        }
+        const startMs = Date.parse(start);
+        const endMs = Date.parse(end);
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+          return commandResult(requestId, false, {}, "invalid_schedule_time");
+        }
+        cleaned.push({ id: scheduleId, title, url, start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() });
+      }
+
+      cleaned.sort((x, y) => Date.parse(x.start) - Date.parse(y.start));
+      config.schedules = cleaned;
+      saveConfig();
+      lastSignature = "";
+      sendPlaylist(true);
+      return commandResult(requestId, true, { schedules: config.schedules });
     }
 
     return commandResult(requestId, false, {}, "unknown_command");
