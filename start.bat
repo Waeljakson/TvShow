@@ -32,7 +32,7 @@ if not exist agent-config.json (
   echo ==========================================
   echo.
   set /p "TVKEY=Paste Agent Key: "
-  if "%TVKEY%"=="" (
+  if not defined TVKEY (
     echo Agent Key is required.
     pause
     exit /b 1
