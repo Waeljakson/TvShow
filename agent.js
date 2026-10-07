@@ -55,13 +55,7 @@ function loadConfig() {
 
 let config;
 try {
-  try {
-    config = loadConfig();
-  } catch (err) {
-    console.error("[CONFIG ERROR]", err.message);
-    reconnectTimer = setTimeout(connect, 10000);
-    return;
-  }
+  config = loadConfig();
 } catch (err) {
   console.error("");
   console.error("[CONFIG ERROR] Could not read agent-config.json");
@@ -330,7 +324,13 @@ function handleCommand(msg) {
 
 function connect() {
   clearTimeout(reconnectTimer);
-  config = loadConfig();
+  try {
+    config = loadConfig();
+  } catch (err) {
+    console.error("[CONFIG ERROR]", err.message);
+    reconnectTimer = setTimeout(connect, 10000);
+    return;
+  }
 
   if (!config.serverUrl || config.serverUrl.includes("YOUR-TVSHOW-SERVER") || !config.agentKey || config.agentKey.includes("CHANGE_THIS")) {
     console.error("");
