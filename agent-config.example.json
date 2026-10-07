@@ -1,6 +1,6 @@
 {
-  "serverUrl": "https://YOUR-TVSHOW-SERVER.onrender.com",
-  "agentKey": "CHANGE_THIS_AGENT_KEY",
+  "serverUrl": "https://tvshow-ck1t.onrender.com",
+  "agentKey": "PASTE_AGENT_KEY_HERE",
   "mediaDir": "D:\\TvShow\\Media",
   "imageDuration": 10,
   "order": [],
