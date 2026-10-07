@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TvShow Control</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0d10;--panel:#14181d;--panel2:#1b2027;--line:#2a313a;--text:#f5f7fa;--muted:#98a2ad;--accent:#4da3ff;--good:#35c46a;--bad:#ef5350}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    button,input{font:inherit}
+    button{cursor:pointer}
+    .wrap{width:min(1180px,94%);margin:0 auto;padding:28px 0 48px}
+    h1,h2,p{margin-top:0}
+    h1{font-size:28px;margin-bottom:8px}
+    h2{font-size:19px}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1.05fr 1.95fr;gap:18px;align-items:start}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+    .stack{display:grid;gap:12px}
+    label{display:grid;gap:7px;color:#d9dfe6;font-size:14px}
+    input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;background:#0f1318;color:#fff;padding:10px 12px;outline:none}
+    input:focus{border-color:var(--accent)}
+    .btn{min-height:42px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:#fff;padding:9px 13px}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#06111c;font-weight:700}
+    .btn.danger{border-color:#5b2a2a;color:#ff9b9b}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .between{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+    .status{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+    .dot{width:9px;height:9px;border-radius:50%;background:#777}
+    .status.online .dot{background:var(--good)}
+    .status.offline .dot{background:var(--bad)}
+    .playlist{display:grid;gap:9px;margin-top:12px}
+    .item{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:#101419}
+    .badge{width:52px;height:52px;border-radius:10px;display:grid;place-items:center;background:var(--panel2);font-size:11px;color:var(--muted)}
+    .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+    .sub{font-size:12px;color:var(--muted);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .duration{width:80px!important;min-height:38px!important}
+    #login{max-width:430px;margin:90px auto}
+    #app{display:none}
+    .notice{font-size:13px;line-height:1.7;padding:12px;border-right:3px solid var(--accent);background:#10161c;border-radius:8px}
+    .error{color:#ff9b9b;min-height:20px;font-size:13px}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}.item{grid-template-columns:46px minmax(0,1fr)}.item .actions{grid-column:1/-1}.badge{width:46px;height:46px}}
+  </style>
+</head>
+<body>
+  <section id="login" class="card">
+    <h1>TvShow</h1>
+    <p class="muted">لوحة التحكم في شاشة العرض</p>
+    <form id="loginForm" class="stack">
+      <label>رمز الإدارة
+        <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="2468">
+      </label>
+      <button class="btn primary" type="submit">دخول</button>
+      <div id="loginError" class="error"></div>
+    </form>
+  </section>
+
+  <main id="app">
+    <div class="wrap">
+      <div class="between" style="margin-bottom:20px">
+        <div>
+          <h1>TvShow Control</h1>
+          <p class="muted">الملفات تُعرض مباشرة من هارد اللابتوب ولا يتم رفعها لقاعدة بيانات.</p>
+        </div>
+        <div class="row">
+          <span id="screenStatus" class="status offline"><span class="dot"></span><span>الشاشة غير متصلة</span></span>
+          <button id="openDisplay" class="btn" type="button">فتح شاشة العرض</button>
+          <button id="logout" class="btn" type="button">خروج</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <aside class="stack">
+          <section class="card stack">
+            <h2>مصدر الملفات</h2>
+            <label>مسار المجلد على اللابتوب
+              <input id="mediaDir" type="text" placeholder="D:\TvShow\Media">
+            </label>
+            <label>المدة الافتراضية للصورة بالثواني
+              <input id="imageDuration" type="number" min="1" max="3600" value="10">
+            </label>
+            <button id="saveSettings" class="btn primary" type="button">حفظ المجلد والإعدادات</button>
+            <div id="settingsMsg" class="error"></div>
+            <div class="notice">ضع ملفات MP4 / WebM والصور JPG / PNG / WebP داخل المجلد. TvShow يكتشف أي ملف جديد تلقائيًا.</div>
+          </section>
+
+          <section class="card stack">
+            <h2>التحكم المباشر</h2>
+            <div class="row">
+              <button class="btn" data-command="previous" type="button">السابق</button>
+              <button class="btn" data-command="play" type="button">تشغيل</button>
+              <button class="btn" data-command="pause" type="button">إيقاف مؤقت</button>
+              <button class="btn" data-command="next" type="button">التالي</button>
+              <button class="btn" data-command="reload" type="button">تحديث الشاشة</button>
+            </div>
+            <p id="nowPlaying" class="muted">لا توجد بيانات تشغيل بعد.</p>
+          </section>
+        </aside>
+
+        <section class="card">
+          <div class="between">
+            <div>
+              <h2 style="margin-bottom:5px">قائمة العرض</h2>
+              <div id="count" class="muted">0 ملف</div>
+            </div>
+            <button id="refresh" class="btn" type="button">تحديث القائمة</button>
+          </div>
+          <div id="playlist" class="playlist"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const qs = s => document.querySelector(s);
+      let pin = sessionStorage.getItem("tvshowPin") || "";
+      let items = [];
+
+      async function api(url, options={}){
+        const headers = {...(options.headers || {})};
+        if(options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+        if(pin) headers["X-Admin-Pin"] = pin;
+        const res = await fetch(url, {...options, headers, cache:"no-store"});
+        let data = {};
+        try{ data = await res.json(); }catch{}
+        if(res.status === 401){
+          sessionStorage.removeItem("tvshowPin");
+          pin = "";
+          showLogin("رمز الإدارة غير صحيح.");
+          throw new Error("unauthorized");
+        }
+        if(!res.ok) throw new Error(data.error || "request_failed");
+        return data;
+      }
+
+      function showLogin(message=""){
+        qs("#login").style.display = "block";
+        qs("#app").style.display = "none";
+        qs("#loginError").textContent = message;
+      }
+
+      function showApp(){
+        qs("#login").style.display = "none";
+        qs("#app").style.display = "block";
+        loadAll();
+      }
+
+      async function verify(){
+        if(!pin) return showLogin();
+        try{
+          const res = await fetch("/api/admin/verify", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({pin})
+          });
+          if(!res.ok) return showLogin("أدخل رمز الإدارة.");
+          showApp();
+        }catch{
+          showLogin("تعذر الاتصال بالسيرفر.");
+        }
+      }
+
+      qs("#loginForm").addEventListener("submit", async e => {
+        e.preventDefault();
+        const candidate = qs("#pinInput").value.trim();
+        try{
+          const res = await fetch("/api/admin/verify", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({pin:candidate})
+          });
+          if(!res.ok){
+            qs("#loginError").textContent = "رمز الإدارة غير صحيح.";
+            return;
+          }
+          pin = candidate;
+          sessionStorage.setItem("tvshowPin", pin);
+          showApp();
+        }catch{
+          qs("#loginError").textContent = "تعذر الاتصال بالسيرفر.";
+        }
+      });
+
+      qs("#logout").addEventListener("click", () => {
+        sessionStorage.removeItem("tvshowPin");
+        pin = "";
+        showLogin();
+      });
+
+      qs("#openDisplay").addEventListener("click", () => window.open("/display", "_blank"));
+
+      async function loadStatus(){
+        try{
+          const s = await api("/api/status");
+          qs("#mediaDir").value = s.mediaDir || "";
+          qs("#imageDuration").value = s.defaultImageDuration || 10;
+          const el = qs("#screenStatus");
+          el.className = "status " + (s.online ? "online" : "offline");
+          el.querySelector("span:last-child").textContent = s.online ? "الشاشة متصلة" : "الشاشة غير متصلة";
+          qs("#nowPlaying").textContent = s.display?.currentName
+            ? "المعروض الآن: " + s.display.currentName + " — " + (s.display.status || "")
+            : "لا توجد بيانات تشغيل بعد.";
+        }catch{}
+      }
+
+      function formatBytes(n){
+        const value = Number(n || 0);
+        if(value < 1024*1024) return (value/1024).toFixed(0) + " KB";
+        return (value/(1024*1024)).toFixed(1) + " MB";
+      }
+
+      async function loadPlaylist(){
+        try{
+          const data = await api("/api/playlist");
+          items = data.items || [];
+          qs("#count").textContent = items.length + " ملف";
+          renderPlaylist();
+        }catch{}
+      }
+
+      function renderPlaylist(){
+        const root = qs("#playlist");
+        root.innerHTML = "";
+        if(!items.length){
+          root.innerHTML = '<div class="muted" style="padding:28px 0;text-align:center">لا توجد ملفات مدعومة داخل المجلد الحالي.</div>';
+          return;
+        }
+        items.forEach((item, i) => {
+          const row = document.createElement("div");
+          row.className = "item";
+
+          const badge = document.createElement("div");
+          badge.className = "badge";
+          badge.textContent = item.type === "video" ? "VIDEO" : "IMAGE";
+
+          const info = document.createElement("div");
+          info.innerHTML = '<div class="name"></div><div class="sub"></div>';
+          info.querySelector(".name").textContent = item.name;
+          info.querySelector(".sub").textContent = (item.folder ? item.folder + " • " : "") + formatBytes(item.size);
+
+          const actions = document.createElement("div");
+          actions.className = "actions row";
+
+          const show = document.createElement("button");
+          show.type = "button";
+          show.className = "btn primary";
+          show.textContent = "اعرض الآن";
+          show.addEventListener("click", () => command("show", item.id));
+          actions.appendChild(show);
+
+          if(item.type === "image"){
+            const dur = document.createElement("input");
+            dur.className = "duration";
+            dur.type = "number";
+            dur.min = "1";
+            dur.max = "3600";
+            dur.value = item.duration || 10;
+            dur.title = "مدة الصورة بالثواني";
+            dur.addEventListener("change", async () => {
+              try{
+                await api("/api/admin/image-duration", {
+                  method:"POST",
+                  body:JSON.stringify({id:item.id,duration:Number(dur.value)})
+                });
+                await loadPlaylist();
+              }catch{}
+            });
+            actions.appendChild(dur);
+          }
+
+          const up = document.createElement("button");
+          up.type = "button";
+          up.className = "btn";
+          up.textContent = "↑";
+          up.disabled = i === 0;
+          up.title = "تحريك لأعلى";
+          up.addEventListener("click", () => move(i, i-1));
+
+          const down = document.createElement("button");
+          down.type = "button";
+          down.className = "btn";
+          down.textContent = "↓";
+          down.disabled = i === items.length - 1;
+          down.title = "تحريك لأسفل";
+          down.addEventListener("click", () => move(i, i+1));
+
+          actions.append(up, down);
+          row.append(badge, info, actions);
+          root.appendChild(row);
+        });
+      }
+
+      async function move(from, to){
+        if(to < 0 || to >= items.length) return;
+        const copy = [...items];
+        const [moved] = copy.splice(from, 1);
+        copy.splice(to, 0, moved);
+        items = copy;
+        renderPlaylist();
+        try{
+          await api("/api/admin/order", {
+            method:"POST",
+            body:JSON.stringify({order:items.map(x => x.id)})
+          });
+        }catch{
+          await loadPlaylist();
+        }
+      }
+
+      async function command(action, id){
+        try{
+          await api("/api/admin/control", {
+            method:"POST",
+            body:JSON.stringify(id ? {action,id} : {action})
+          });
+        }catch{}
+      }
+
+      document.querySelectorAll("[data-command]").forEach(btn => {
+        btn.addEventListener("click", () => command(btn.dataset.command));
+      });
+
+      qs("#saveSettings").addEventListener("click", async () => {
+        const msg = qs("#settingsMsg");
+        msg.textContent = "";
+        try{
+          const data = await api("/api/admin/settings", {
+            method:"POST",
+            body:JSON.stringify({
+              mediaDir:qs("#mediaDir").value.trim(),
+              imageDuration:Number(qs("#imageDuration").value)
+            })
+          });
+          qs("#mediaDir").value = data.mediaDir;
+          qs("#imageDuration").value = data.imageDuration;
+          msg.style.color = "#7ee59d";
+          msg.textContent = "تم حفظ الإعدادات.";
+          await loadPlaylist();
+        }catch(err){
+          msg.style.color = "#ff9b9b";
+          msg.textContent = err.message === "folder_not_found"
+            ? "المجلد غير موجود على اللابتوب."
+            : "تعذر حفظ الإعدادات.";
+        }
+      });
+
+      qs("#refresh").addEventListener("click", loadPlaylist);
+
+      async function loadAll(){
+        await Promise.all([loadStatus(), loadPlaylist()]);
+      }
+
+      setInterval(loadStatus, 5000);
+      verify();
+    })();
+  </script>
+</body>
+</html>
