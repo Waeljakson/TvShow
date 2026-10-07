@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions DisableDelayedExpansion
 title TvShow Laptop Agent
 cd /d "%~dp0"
 
@@ -25,19 +25,39 @@ if not exist node_modules (
 )
 
 if not exist agent-config.json (
-  copy /y agent-config.example.json agent-config.json >nul
   echo.
-  echo TvShow created agent-config.json
-  echo Edit serverUrl and agentKey, then save the file.
+  echo ==========================================
+  echo First-time TvShow setup
+  echo Public server: https://tvshow-ck1t.onrender.com
+  echo ==========================================
   echo.
-  start "" notepad "%~dp0agent-config.json"
-  pause
-  exit /b 0
+  set /p "TVKEY=Paste Agent Key: "
+  if "%TVKEY%"=="" (
+    echo Agent Key is required.
+    pause
+    exit /b 1
+  )
+  set /p "MEDIADIR=Media folder path [D:\TvShow\Media]: "
+  if "%MEDIADIR%"=="" set "MEDIADIR=D:\TvShow\Media"
+
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$o=[ordered]@{serverUrl='https://tvshow-ck1t.onrender.com';agentKey=$env:TVKEY;mediaDir=$env:MEDIADIR;imageDuration=10;order=@();imageDurations=@{};reconnectSeconds=5}; $o | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 'agent-config.json'" 2>nul
+  if errorlevel 1 (
+    echo.
+    echo Could not create agent-config.json automatically.
+    echo Creating the template instead.
+    copy /y agent-config.example.json agent-config.json >nul
+    start "" notepad "%~dp0agent-config.json"
+    pause
+    exit /b 1
+  )
 )
 
 echo.
-echo Starting TvShow Laptop Agent...
-echo Keep this window open while the TV is using media from this laptop.
+echo ==========================================
+echo TvShow Laptop Agent
+echo Server: https://tvshow-ck1t.onrender.com
+echo Keep this window open while the TV is on.
+echo ==========================================
 echo.
 call npm run agent
 
