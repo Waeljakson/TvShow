@@ -350,8 +350,15 @@ function connect() {
     return;
   }
 
-  console.log(`Connecting to ${config.serverUrl} ...`);
-  ws = new WebSocket(url);
+  console.log("");
+  console.log("==========================================");
+  console.log("TvShow Agent diagnostics");
+  console.log("Server:", config.serverUrl);
+  console.log("Media :", config.mediaDir);
+  console.log("Node  :", process.version);
+  console.log("==========================================");
+  console.log("Connecting to TvShow server...");
+  ws = new WebSocket(url, { handshakeTimeout: 15000 });
 
   ws.on("open", () => {
     console.log("TvShow Agent connected.");
@@ -403,6 +410,10 @@ function connect() {
     }
     activeStreams.clear();
     reconnectTimer = setTimeout(connect, config.reconnectSeconds * 1000);
+  });
+
+  ws.on("unexpected-response", (_req, res) => {
+    console.error("Connection rejected by server. HTTP status:", res.statusCode);
   });
 
   ws.on("error", err => {
