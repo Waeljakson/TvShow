@@ -217,7 +217,7 @@ async function streamMedia(msg) {
     highWaterMark: 192 * 1024
   });
 
-  activeStreams.set(requestId, stream);
+  activeStreams.set(requestId, { stream, waitingAck: false });
 
   stream.on("data", chunk => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -225,17 +225,18 @@ async function streamMedia(msg) {
       return;
     }
     stream.pause();
+    const state = activeStreams.get(requestId);
+    if (state) state.waitingAck = true;
     const push = () => {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         stream.destroy();
         return;
       }
-      if (ws.bufferedAmount > 6 * 1024 * 1024) {
+      if (ws.bufferedAmount > 2 * 1024 * 1024) {
         setTimeout(push, 20);
         return;
       }
       send({ type: "media-chunk", requestId, data: chunk.toString("base64") });
-      stream.resume();
     };
     push();
   });
@@ -360,10 +361,19 @@ function connect() {
       return;
     }
 
+    if (msg.type === "media-ack") {
+      const state = activeStreams.get(String(msg.requestId || ""));
+      if (state?.stream && state.waitingAck) {
+        state.waitingAck = false;
+        state.stream.resume();
+      }
+      return;
+    }
+
     if (msg.type === "media-cancel") {
-      const stream = activeStreams.get(String(msg.requestId || ""));
-      if (stream) {
-        stream.destroy();
+      const state = activeStreams.get(String(msg.requestId || ""));
+      if (state?.stream) {
+        state.stream.destroy();
         activeStreams.delete(String(msg.requestId || ""));
       }
     }
@@ -371,8 +381,8 @@ function connect() {
 
   ws.on("close", () => {
     console.log("Agent disconnected. Reconnecting...");
-    for (const stream of activeStreams.values()) {
-      try { stream.destroy(); } catch {}
+    for (const state of activeStreams.values()) {
+      try { state.stream?.destroy(); } catch {}
     }
     activeStreams.clear();
     reconnectTimer = setTimeout(connect, config.reconnectSeconds * 1000);
