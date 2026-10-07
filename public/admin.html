@@ -78,16 +78,16 @@
             </label>
             <div class="row">
               <label style="flex:1;min-width:180px">وقت البداية
-                <input id="scheduleStart" type="datetime-local">
+                <input id="scheduleStart" type="time">
               </label>
               <label style="flex:1;min-width:180px">وقت النهاية
-                <input id="scheduleEnd" type="datetime-local">
+                <input id="scheduleEnd" type="time">
               </label>
             </div>
             <button id="addSchedule" class="btn primary" type="button">إضافة الموعد</button>
             <div id="scheduleMsg" class="error"></div>
             <div id="scheduleList" class="stack"></div>
-            <div class="notice">في وقت البداية ستتحول شاشة العرض تلقائيًا للرابط. عند وقت النهاية ترجع للفيديوهات والصور تلقائيًا.</div>
+            <div class="notice">الموعد يتكرر يوميًا حسب ساعة جهاز الشاشة. في وقت البداية تتحول الشاشة للرابط، وعند وقت النهاية ترجع للفيديوهات والصور تلقائيًا.</div>
           </section>
 
           <section class="card stack">
@@ -227,6 +227,9 @@
       }
 
       function formatScheduleTime(value){
+        if(/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""))){
+          return value;
+        }
         const d = new Date(value);
         return Number.isFinite(d.getTime()) ? d.toLocaleString("ar-EG") : value;
       }
@@ -247,7 +250,9 @@
           title.textContent = item.title || "رابط مجدول";
           const time = document.createElement("div");
           time.className = "sub";
-          time.textContent = formatScheduleTime(item.start) + " ← " + formatScheduleTime(item.end);
+          time.textContent = item.daily
+            ? "يوميًا: " + formatScheduleTime(item.startTime) + " ← " + formatScheduleTime(item.endTime)
+            : formatScheduleTime(item.start) + " ← " + formatScheduleTime(item.end);
           const url = document.createElement("div");
           url.className = "sub";
           url.textContent = item.url;
@@ -358,8 +363,8 @@
       qs("#addSchedule").addEventListener("click", async () => {
         const title = qs("#scheduleTitle").value.trim();
         const url = qs("#scheduleUrl").value.trim();
-        const startRaw = qs("#scheduleStart").value;
-        const endRaw = qs("#scheduleEnd").value;
+        const startTime = qs("#scheduleStart").value;
+        const endTime = qs("#scheduleEnd").value;
         const msg = qs("#scheduleMsg");
         msg.textContent = "";
 
@@ -370,10 +375,9 @@
           return;
         }
 
-        const start = new Date(startRaw);
-        const end = new Date(endRaw);
-        if(!startRaw || !endRaw || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start){
-          msg.textContent = "حدد وقت بداية ونهاية صحيحين، والنهاية يجب أن تكون بعد البداية.";
+        const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+        if(!timePattern.test(startTime) || !timePattern.test(endTime) || startTime === endTime){
+          msg.textContent = "حدد ساعة بداية ونهاية مختلفتين.";
           return;
         }
 
@@ -381,8 +385,9 @@
           id: Date.now().toString(36) + Math.random().toString(36).slice(2,8),
           title: title || "رابط مجدول",
           url,
-          start: start.toISOString(),
-          end: end.toISOString()
+          daily: true,
+          startTime,
+          endTime
         };
 
         await saveSchedules([...schedules, item]);
