@@ -1,6 +1,7 @@
 node_modules/
 runtime/
 .env
+agent-config.json
 *.log
 .DS_Store
 Thumbs.db
