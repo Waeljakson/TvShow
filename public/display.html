@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>TvShow Display</title>
+  <style>
+    *{box-sizing:border-box}
+    html,body{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
+    body{font-family:Tahoma,Arial,sans-serif;color:#fff}
+    #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+    #stage video,#stage img{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+    #message{max-width:720px;padding:32px;text-align:center;color:#e8e8e8;font-size:clamp(20px,3vw,42px);line-height:1.6}
+    #message small{display:block;margin-top:14px;color:#888;font-size:.55em}
+    #startOverlay{position:fixed;inset:0;border:0;background:rgba(0,0,0,.88);color:#fff;display:none;place-items:center;cursor:pointer;z-index:20}
+    #startOverlay span{display:inline-block;padding:22px 36px;border:2px solid #fff;border-radius:16px;font-size:clamp(22px,3vw,46px)}
+    #corner{position:fixed;left:16px;bottom:12px;font-size:12px;color:#777;z-index:5;display:none}
+  </style>
+</head>
+<body>
+  <main id="stage" aria-live="polite">
+    <div id="message">جاري الاتصال بمكتبة العرض…</div>
+  </main>
+  <button id="startOverlay" type="button"><span>اضغط لبدء العرض</span></button>
+  <div id="corner">TvShow</div>
+
+  <script>
+    (() => {
+      const stage = document.getElementById("stage");
+      const overlay = document.getElementById("startOverlay");
+      let items = [];
+      let index = 0;
+      let imageTimer = null;
+      let currentEl = null;
+      let status = "loading";
+      let eventSource = null;
+
+      const current = () => items[index] || null;
+
+      function clearTimer(){
+        if(imageTimer){ clearTimeout(imageTimer); imageTimer = null; }
+      }
+
+      function showMessage(text, small=""){
+        clearTimer();
+        currentEl = null;
+        stage.innerHTML = "";
+        const box = document.createElement("div");
+        box.id = "message";
+        box.textContent = text;
+        if(small){
+          const s = document.createElement("small");
+          s.textContent = small;
+          box.appendChild(s);
+        }
+        stage.appendChild(box);
+      }
+
+      function next(){
+        if(!items.length) return;
+        index = (index + 1) % items.length;
+        render();
+      }
+
+      function previous(){
+        if(!items.length) return;
+        index = (index - 1 + items.length) % items.length;
+        render();
+      }
+
+      async function tryPlay(video){
+        try{
+          await video.play();
+          status = "playing";
+          overlay.style.display = "none";
+        }catch{
+          status = "waiting_for_user";
+          overlay.style.display = "grid";
+        }
+      }
+
+      function render(){
+        clearTimer();
+        const item = current();
+        if(!item){
+          status = "empty";
+          showMessage("لا توجد ملفات للعرض", "أضف فيديوهات أو صورًا داخل المجلد المحدد على اللابتوب.");
+          return;
+        }
+
+        stage.innerHTML = "";
+        if(item.type === "video"){
+          const video = document.createElement("video");
+          video.src = item.mediaUrl;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.preload = "auto";
+          video.setAttribute("aria-label", item.name);
+          video.addEventListener("ended", next);
+          video.addEventListener("playing", () => { status = "playing"; overlay.style.display = "none"; });
+          video.addEventListener("pause", () => { if(!video.ended) status = "paused"; });
+          video.addEventListener("error", () => {
+            status = "error";
+            setTimeout(next, 2500);
+          });
+          stage.appendChild(video);
+          currentEl = video;
+          tryPlay(video);
+        }else{
+          const img = document.createElement("img");
+          img.src = item.mediaUrl;
+          img.alt = item.name;
+          img.addEventListener("error", () => setTimeout(next, 2000));
+          stage.appendChild(img);
+          currentEl = img;
+          status = "playing";
+          overlay.style.display = "none";
+          imageTimer = setTimeout(next, Math.max(1, Number(item.duration || 10)) * 1000);
+        }
+      }
+
+      async function loadPlaylist(keepCurrent=true){
+        const previousId = keepCurrent && current() ? current().id : null;
+        try{
+          const res = await fetch("/api/playlist", {cache:"no-store"});
+          const data = await res.json();
+          items = Array.isArray(data.items) ? data.items : [];
+          if(previousId){
+            const found = items.findIndex(x => x.id === previousId);
+            index = found >= 0 ? found : 0;
+          }else{
+            index = Math.min(index, Math.max(0, items.length - 1));
+          }
+          render();
+        }catch{
+          status = "offline";
+          showMessage("تعذر الاتصال باللابتوب", "سيحاول TvShow إعادة الاتصال تلقائيًا.");
+        }
+      }
+
+      function connectEvents(){
+        if(eventSource) eventSource.close();
+        eventSource = new EventSource("/api/events");
+        eventSource.addEventListener("playlist", () => loadPlaylist(true));
+        eventSource.addEventListener("control", e => {
+          let cmd = {};
+          try{ cmd = JSON.parse(e.data); }catch{}
+          if(cmd.action === "next") next();
+          if(cmd.action === "previous") previous();
+          if(cmd.action === "pause" && currentEl?.tagName === "VIDEO") currentEl.pause();
+          if(cmd.action === "play" && currentEl?.tagName === "VIDEO") tryPlay(currentEl);
+          if(cmd.action === "reload") loadPlaylist(true);
+          if(cmd.action === "show"){
+            const found = items.findIndex(x => x.id === cmd.id);
+            if(found >= 0){ index = found; render(); }
+          }
+        });
+        eventSource.onerror = () => { status = "reconnecting"; };
+      }
+
+      overlay.addEventListener("click", async () => {
+        try{ await document.documentElement.requestFullscreen?.(); }catch{}
+        if(currentEl?.tagName === "VIDEO") await tryPlay(currentEl);
+        else overlay.style.display = "none";
+      });
+
+      setInterval(() => {
+        const item = current();
+        const position = currentEl?.tagName === "VIDEO" ? Number(currentEl.currentTime || 0) : 0;
+        fetch("/api/display/state", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            currentId:item?.id || null,
+            currentName:item?.name || null,
+            status,
+            position
+          })
+        }).catch(()=>{});
+      }, 5000);
+
+      loadPlaylist(false);
+      connectEvents();
+    })();
+  </script>
+</body>
+</html>
