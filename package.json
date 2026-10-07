@@ -1,17 +1,19 @@
 {
   "name": "tvshow",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Local-first digital signage server: laptop serves local media to a remote TV browser.",
+  "description": "Internet digital signage with a public web relay and a laptop media agent.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "agent": "node agent.js",
     "dev": "node --watch server.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "ws": "^8.18.3"
   }
 }
