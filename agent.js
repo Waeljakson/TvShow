@@ -40,7 +40,8 @@ function ensureConfig() {
 
 function loadConfig() {
   ensureConfig();
-  const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+  const text = fs.readFileSync(CONFIG_FILE, "utf8").replace(/^\uFEFF/, "");
+  const raw = JSON.parse(text);
   return {
     serverUrl: String(raw.serverUrl || "").replace(/\/$/, ""),
     agentKey: String(raw.agentKey || ""),
@@ -52,7 +53,23 @@ function loadConfig() {
   };
 }
 
-let config = loadConfig();
+let config;
+try {
+  try {
+    config = loadConfig();
+  } catch (err) {
+    console.error("[CONFIG ERROR]", err.message);
+    reconnectTimer = setTimeout(connect, 10000);
+    return;
+  }
+} catch (err) {
+  console.error("");
+  console.error("[CONFIG ERROR] Could not read agent-config.json");
+  console.error(err.message);
+  console.error("Delete agent-config.json and run start.bat again.");
+  console.error("");
+  process.exit(1);
+}
 let ws = null;
 let reconnectTimer = null;
 let lastSignature = "";
