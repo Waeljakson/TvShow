@@ -271,7 +271,10 @@ app.get("/media", (req, res) => {
       }
       resetTimer();
       const buffer = Buffer.from(base64, "base64");
-      res.write(buffer);
+      const acknowledge = () => safeSendAgent({ type: "media-ack", requestId });
+      const canContinue = res.write(buffer);
+      if (canContinue) acknowledge();
+      else res.once("drain", acknowledge);
     },
     onEnd() {
       if (finished) return;
@@ -290,8 +293,8 @@ app.get("/media", (req, res) => {
     }
   });
 
-  req.on("close", () => {
-    if (!finished) {
+  res.on("close", () => {
+    if (!finished && !res.writableEnded) {
       finished = true;
       safeSendAgent({ type: "media-cancel", requestId });
       cleanup();
