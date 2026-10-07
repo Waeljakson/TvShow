@@ -279,8 +279,10 @@
             body:JSON.stringify({schedules:next})
           });
           schedules = Array.isArray(data.schedules) ? data.schedules : next;
-          msg.style.color = "#7ee59d";
-          msg.textContent = "تم حفظ الجدول.";
+          msg.style.color = data.persistedOnAgent === false ? "#ffd37e" : "#7ee59d";
+          msg.textContent = data.persistedOnAgent === false
+            ? "تم حفظ الموعد على الشاشة، لكن التخزين المحلي على اللابتوب لم يكتمل. أغلق أي نافذة TvShow Agent إضافية وشغّل نافذة واحدة فقط."
+            : "تم حفظ الجدول.";
           renderSchedules();
         }catch(err){
           msg.style.color = "#ff9b9b";
