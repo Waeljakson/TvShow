@@ -323,25 +323,62 @@ function handleCommand(msg) {
       const list = Array.isArray(data.schedules) ? data.schedules : null;
       if (!list) return commandResult(requestId, false, {}, "invalid_schedules");
 
+      const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
       const cleaned = [];
+
       for (const item of list.slice(0, 100)) {
         const scheduleId = String(item?.id || "").trim();
         const title = String(item?.title || "").trim().slice(0, 120);
         const url = String(item?.url || "").trim();
-        const start = String(item?.start || "").trim();
-        const end = String(item?.end || "").trim();
+
         if (!scheduleId || !/^https?:\/\//i.test(url)) {
           return commandResult(requestId, false, {}, "invalid_schedule_url");
         }
+
+        const startTime = String(item?.startTime || "").trim();
+        const endTime = String(item?.endTime || "").trim();
+
+        if (startTime || endTime) {
+          if (!timePattern.test(startTime) || !timePattern.test(endTime) || startTime === endTime) {
+            return commandResult(requestId, false, {}, "invalid_schedule_time");
+          }
+          cleaned.push({
+            id: scheduleId,
+            title,
+            url,
+            daily: true,
+            startTime,
+            endTime
+          });
+          continue;
+        }
+
+        const start = String(item?.start || "").trim();
+        const end = String(item?.end || "").trim();
         const startMs = Date.parse(start);
         const endMs = Date.parse(end);
+
         if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
           return commandResult(requestId, false, {}, "invalid_schedule_time");
         }
-        cleaned.push({ id: scheduleId, title, url, start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() });
+
+        cleaned.push({
+          id: scheduleId,
+          title,
+          url,
+          daily: false,
+          start: new Date(startMs).toISOString(),
+          end: new Date(endMs).toISOString()
+        });
       }
 
-      cleaned.sort((x, y) => Date.parse(x.start) - Date.parse(y.start));
+      cleaned.sort((x, y) => {
+        if (x.daily && y.daily) return x.startTime.localeCompare(y.startTime);
+        if (x.daily) return -1;
+        if (y.daily) return 1;
+        return Date.parse(x.start) - Date.parse(y.start);
+      });
+
       config.schedules = cleaned;
       saveConfig();
       lastSignature = "";
