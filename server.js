@@ -57,6 +57,20 @@ function isDisplayOnline() {
   return Date.now() - displayState.lastSeen < 15000;
 }
 
+function versionParts(value) {
+  return String(value || "0.0.0").split(".").map(x => Number.parseInt(x, 10) || 0).slice(0, 3);
+}
+
+function compareVersions(a, b) {
+  const av = versionParts(a);
+  const bv = versionParts(b);
+  for (let i = 0; i < 3; i++) {
+    const diff = (av[i] || 0) - (bv[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 function sseSend(res, event, payload) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -362,12 +376,25 @@ server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname !== "/agent") return socket.destroy();
     const key = String(url.searchParams.get("key") || "");
-    console.log("[AGENT UPGRADE]", new Date().toISOString());
+    const incomingVersion = String(url.searchParams.get("v") || "0.0.0");
+    console.log("[AGENT UPGRADE]", new Date().toISOString(), "version", incomingVersion);
     if (!AGENT_KEY || key !== AGENT_KEY) {
       console.log("[AGENT REJECTED] invalid key");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       return socket.destroy();
     }
+    if (agentSocket && agentSocket.readyState === 1 && isAgentOnline()) {
+      const currentVersion = String(agentMeta.version || "0.0.0");
+      if (compareVersions(incomingVersion, currentVersion) <= 0) {
+        console.log("[AGENT REJECTED] existing agent version", currentVersion, "is equal or newer");
+        socket.write("HTTP/1.1 409 Conflict\r\n\r\n");
+        return socket.destroy();
+      }
+      console.log("[AGENT REPLACED] newer version", incomingVersion, "replacing", currentVersion);
+      try { agentSocket.close(4001, "Replaced by newer agent version"); } catch {}
+    }
+
+    req.tvshowAgentVersion = incomingVersion;
     console.log("[AGENT ACCEPTED]");
     wss.handleUpgrade(req, socket, head, ws => {
       wss.emit("connection", ws, req);
@@ -378,14 +405,12 @@ server.on("upgrade", (req, socket, head) => {
   }
 });
 
-wss.on("connection", ws => {
+wss.on("connection", (ws, req) => {
   console.log("[AGENT CONNECTED]", new Date().toISOString());
-  if (agentSocket && agentSocket.readyState === 1) {
-    try { agentSocket.close(4001, "Replaced by newer agent connection"); } catch {}
-  }
   agentSocket = ws;
   agentMeta.connected = true;
   agentMeta.lastSeen = Date.now();
+  agentMeta.version = String(req?.tvshowAgentVersion || agentMeta.version || "0.0.0");
   broadcast("agent-status", { online: true });
 
   ws.on("message", raw => {
