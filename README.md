@@ -1,91 +1,64 @@
 # TvShow
 
-TvShow is a **local-first digital signage server** for displaying videos and images on a TV through its web browser.
+TvShow is an Internet digital-signage system where the **TV opens a normal HTTPS page** and the **laptop remains the media source**.
+
+## Public URLs
+
+- Display: https://tvshow-ck1t.onrender.com/display
+- Admin: https://tvshow-ck1t.onrender.com/admin
+- Default admin PIN: 2468
+
+The TV never opens localhost.
 
 ## Architecture
 
-- **Laptop = server + storage + control panel**
-- **TV = browser only**
-- Media files remain on the laptop hard drive.
-- No database is required.
-- No media files are uploaded to GitHub or cloud storage.
-- The app stores only local settings under `runtime/config.json` (ignored by Git).
+TV Browser → Render public relay → TvShow Agent on laptop → local media folder
+
+Media files stay on the laptop. They are not uploaded in advance to a database or cloud storage.
+
+## Laptop setup
+
+1. Install Node.js 20 or newer.
+2. Download this repository.
+3. Run `start.bat`.
+4. On first run, `agent-config.json` is created and opened.
+5. Keep:
+   - `serverUrl`: `https://tvshow-ck1t.onrender.com`
+6. Paste the private Agent Key into `agentKey`.
+7. Set `mediaDir` to the folder containing videos/images, for example:
+   - `D:\TvShow\Media`
+8. Save the file and run `start.bat` again.
+
+Keep the Agent window open while the TV is displaying media.
 
 ## Supported media
 
 - Video: MP4, WebM, M4V
 - Images: JPG, JPEG, PNG, WebP, GIF
 
-For maximum Smart TV browser compatibility, use **H.264 MP4** for videos.
-
-## Windows quick start
-
-1. Install Node.js 20 or newer.
-2. Download or clone this repository to the laptop.
-3. Double-click `start.bat`.
-4. Open the control panel:
-   - `http://localhost:3000/admin`
-5. Default admin PIN:
-   - `2468`
-6. In the control panel, enter the media folder path, for example:
-   - `D:\TvShow\Media`
-7. Open the display:
-   - `http://localhost:3000/display`
-
-Change the PIN before public use:
-
-```bat
-set ADMIN_PIN=YOUR_PIN
-npm start
-```
-
-## Remote TV through the Internet
-
-The TV does **not** need to be on the same Wi-Fi as the laptop. The laptop's local TvShow server can be published through an outbound tunnel such as Cloudflare Tunnel.
-
-For a temporary test after installing `cloudflared`:
-
-```bat
-cloudflared tunnel --url http://localhost:3000
-```
-
-Cloudflare will return a public HTTPS address. Open its `/display` path on the TV browser.
-
-For permanent use, create a named Cloudflare Tunnel and attach it to a fixed hostname, then point that hostname to:
-
-```
-http://localhost:3000
-```
-
-Keep the laptop powered on and connected to the Internet while the TV is displaying media.
-
-## Main routes
-
-| Route | Purpose |
-|---|---|
-| `/admin` | Laptop control panel |
-| `/display` | Full-screen TV display |
-| `/api/playlist` | Current playlist |
-| `/api/events` | Live Server-Sent Events channel |
+For Smart TV compatibility, H.264 MP4 is recommended.
 
 ## Current features
 
-- Select any existing media folder by entering its Windows path.
-- Automatically detects new media files.
-- Full-screen browser display.
-- Sequential playlist playback and looping.
-- MP4/WebM streaming with HTTP Range support.
-- Image duration control.
-- Reorder playlist.
-- "Show now" control.
-- Next / previous / play / pause / refresh controls.
-- Live TV online/offline indicator.
-- No database.
-- No cloud media upload.
-- Local settings persist after restart.
+- Public Internet display page.
+- Public Internet admin panel.
+- Laptop Agent connects outbound; no router port forwarding is required.
+- Media stays on the laptop.
+- Automatic media-folder scanning.
+- Playlist ordering.
+- Individual image durations.
+- Play / pause / next / previous / reload.
+- Show any item immediately.
+- Agent online/offline status.
+- TV online/offline status.
+- HTTP Range support for browser video seeking/streaming.
+- Flow-controlled media relay to avoid buffering the whole file in server memory.
 
-## Notes
+## Security
 
-Browser autoplay policies vary. If the TV browser blocks autoplay with sound, TvShow displays a one-time **"Press to start"** overlay. After that interaction, playback continues normally.
+The public server uses two secrets:
 
-The public display URL streams files from the laptop over its Internet upload connection. A stable upload speed is therefore important for large or high-bitrate videos.
+- `ADMIN_PIN` for the admin page.
+- `AGENT_KEY` for the laptop Agent connection.
+
+Do not commit `agent-config.json`; it is already excluded by `.gitignore`.
