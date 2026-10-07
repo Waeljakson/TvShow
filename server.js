@@ -200,14 +200,37 @@ app.post("/api/admin/image-duration", requirePin, async (req, res) => {
 });
 
 app.post("/api/admin/schedules", requirePin, async (req, res) => {
+  const incoming = Array.isArray(req.body?.schedules) ? req.body.schedules : null;
+  if (!incoming) return res.status(400).json({ error: "invalid_schedules" });
+
+  // Apply immediately on the public server so the display starts using
+  // the new schedule even if an older laptop Agent is briefly connected.
+  schedules = incoming;
+  broadcast("schedules", { schedules, ts: Date.now() });
+
+  let persistedOnAgent = false;
+  let agentWarning = null;
+
   try {
-    const incoming = Array.isArray(req.body?.schedules) ? req.body.schedules : null;
-    if (!incoming) return res.status(400).json({ error: "invalid_schedules" });
-    const data = await sendAgentCommand("set-schedules", { schedules: incoming });
-    res.json({ ok: true, schedules: data.schedules || [] });
+    if (isAgentOnline()) {
+      const data = await sendAgentCommand("set-schedules", { schedules: incoming }, 5000);
+      schedules = Array.isArray(data.schedules) ? data.schedules : incoming;
+      persistedOnAgent = true;
+      broadcast("schedules", { schedules, ts: Date.now() });
+    } else {
+      agentWarning = "agent_offline";
+    }
   } catch (err) {
-    res.status(err.message === "agent_offline" ? 503 : 502).json({ error: err.message });
+    agentWarning = err.message || "agent_persist_failed";
+    console.log("[SCHEDULE SAVE WARNING]", agentWarning);
   }
+
+  res.json({
+    ok: true,
+    schedules,
+    persistedOnAgent,
+    warning: agentWarning
+  });
 });
 
 app.post("/api/admin/control", requirePin, (req, res) => {
