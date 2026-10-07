@@ -63,11 +63,27 @@
       }
 
       function getActiveSchedule(){
-        const now = Date.now();
+        const nowDate = new Date();
+        const nowMs = nowDate.getTime();
+        const nowMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
+
         return schedules.find(item => {
+          if(item.daily && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(item.startTime || "")) && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(item.endTime || ""))){
+            const [sh, sm] = item.startTime.split(":").map(Number);
+            const [eh, em] = item.endTime.split(":").map(Number);
+            const startMinutes = sh * 60 + sm;
+            const endMinutes = eh * 60 + em;
+
+            if(startMinutes < endMinutes){
+              return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+            }
+
+            return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+          }
+
           const start = Date.parse(item.start);
           const end = Date.parse(item.end);
-          return Number.isFinite(start) && Number.isFinite(end) && now >= start && now < end;
+          return Number.isFinite(start) && Number.isFinite(end) && nowMs >= start && nowMs < end;
         }) || null;
       }
 
