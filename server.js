@@ -321,19 +321,24 @@ server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname !== "/agent") return socket.destroy();
     const key = String(url.searchParams.get("key") || "");
+    console.log("[AGENT UPGRADE]", new Date().toISOString());
     if (!AGENT_KEY || key !== AGENT_KEY) {
+      console.log("[AGENT REJECTED] invalid key");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       return socket.destroy();
     }
+    console.log("[AGENT ACCEPTED]");
     wss.handleUpgrade(req, socket, head, ws => {
       wss.emit("connection", ws, req);
     });
-  } catch {
+  } catch (err) {
+    console.log("[AGENT UPGRADE ERROR]", err.message);
     socket.destroy();
   }
 });
 
 wss.on("connection", ws => {
+  console.log("[AGENT CONNECTED]", new Date().toISOString());
   if (agentSocket && agentSocket.readyState === 1) {
     try { agentSocket.close(4001, "Replaced by newer agent connection"); } catch {}
   }
@@ -401,6 +406,7 @@ wss.on("connection", ws => {
     if (agentSocket === ws) {
       agentSocket = null;
       agentMeta.connected = false;
+      console.log("[AGENT DISCONNECTED]", new Date().toISOString());
       broadcast("agent-status", { online: false });
       for (const [requestId, pending] of pendingMedia) {
         pending.onError("Laptop agent disconnected", 503);
@@ -424,6 +430,10 @@ setInterval(() => {
     ts: Date.now()
   });
 }, 5000);
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, service: "tvshow", ts: Date.now() });
+});
 
 server.listen(PORT, HOST, () => {
   console.log(`TvShow public relay running on port ${PORT}`);
