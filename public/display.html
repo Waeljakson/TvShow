@@ -10,12 +10,12 @@
     html,body{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
     body{font-family:Tahoma,Arial,sans-serif;color:#fff}
     #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-    #stage video,#stage img{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+    #stage video,#stage img,#stage iframe{width:100%;height:100%;background:#000;display:block;border:0}
+    #stage video,#stage img{object-fit:contain}
     #message{max-width:720px;padding:32px;text-align:center;color:#e8e8e8;font-size:clamp(20px,3vw,42px);line-height:1.6}
     #message small{display:block;margin-top:14px;color:#888;font-size:.55em}
     #startOverlay{position:fixed;inset:0;border:0;background:rgba(0,0,0,.88);color:#fff;display:none;place-items:center;cursor:pointer;z-index:20}
     #startOverlay span{display:inline-block;padding:22px 36px;border:2px solid #fff;border-radius:16px;font-size:clamp(22px,3vw,46px)}
-    #corner{position:fixed;left:16px;bottom:12px;font-size:12px;color:#777;z-index:5;display:none}
   </style>
 </head>
 <body>
@@ -23,23 +23,28 @@
     <div id="message">جاري الاتصال بمكتبة العرض…</div>
   </main>
   <button id="startOverlay" type="button"><span>اضغط لبدء العرض</span></button>
-  <div id="corner">TvShow</div>
 
   <script>
     (() => {
       const stage = document.getElementById("stage");
       const overlay = document.getElementById("startOverlay");
+
       let items = [];
+      let schedules = [];
       let index = 0;
       let imageTimer = null;
       let currentEl = null;
       let status = "loading";
       let eventSource = null;
+      let activeScheduleId = null;
 
       const current = () => items[index] || null;
 
       function clearTimer(){
-        if(imageTimer){ clearTimeout(imageTimer); imageTimer = null; }
+        if(imageTimer){
+          clearTimeout(imageTimer);
+          imageTimer = null;
+        }
       }
 
       function showMessage(text, small=""){
@@ -57,14 +62,61 @@
         stage.appendChild(box);
       }
 
+      function getActiveSchedule(){
+        const now = Date.now();
+        return schedules.find(item => {
+          const start = Date.parse(item.start);
+          const end = Date.parse(item.end);
+          return Number.isFinite(start) && Number.isFinite(end) && now >= start && now < end;
+        }) || null;
+      }
+
+      function showScheduledPage(schedule){
+        if(activeScheduleId === schedule.id && currentEl?.tagName === "IFRAME") return;
+        clearTimer();
+        if(currentEl?.tagName === "VIDEO"){
+          try{ currentEl.pause(); }catch{}
+        }
+        overlay.style.display = "none";
+        stage.innerHTML = "";
+
+        const frame = document.createElement("iframe");
+        frame.src = schedule.url;
+        frame.title = schedule.title || "Scheduled page";
+        frame.allow = "autoplay; fullscreen";
+        frame.referrerPolicy = "strict-origin-when-cross-origin";
+
+        stage.appendChild(frame);
+        currentEl = frame;
+        activeScheduleId = schedule.id;
+        status = "scheduled_url";
+      }
+
+      function leaveScheduledMode(){
+        if(!activeScheduleId) return;
+        activeScheduleId = null;
+        currentEl = null;
+        status = "returning_to_media";
+        render();
+      }
+
+      function evaluateSchedule(){
+        const active = getActiveSchedule();
+        if(active){
+          showScheduledPage(active);
+        }else{
+          leaveScheduledMode();
+        }
+      }
+
       function next(){
-        if(!items.length) return;
+        if(activeScheduleId || !items.length) return;
         index = (index + 1) % items.length;
         render();
       }
 
       function previous(){
-        if(!items.length) return;
+        if(activeScheduleId || !items.length) return;
         index = (index - 1 + items.length) % items.length;
         render();
       }
@@ -81,6 +133,12 @@
       }
 
       function render(){
+        const active = getActiveSchedule();
+        if(active){
+          showScheduledPage(active);
+          return;
+        }
+
         clearTimer();
         const item = current();
         if(!item){
@@ -98,8 +156,13 @@
           video.preload = "auto";
           video.setAttribute("aria-label", item.name);
           video.addEventListener("ended", next);
-          video.addEventListener("playing", () => { status = "playing"; overlay.style.display = "none"; });
-          video.addEventListener("pause", () => { if(!video.ended) status = "paused"; });
+          video.addEventListener("playing", () => {
+            status = "playing";
+            overlay.style.display = "none";
+          });
+          video.addEventListener("pause", () => {
+            if(!video.ended && !activeScheduleId) status = "paused";
+          });
           video.addEventListener("error", () => {
             status = "error";
             setTimeout(next, 2500);
@@ -126,37 +189,69 @@
           const res = await fetch("/api/playlist", {cache:"no-store"});
           const data = await res.json();
           items = Array.isArray(data.items) ? data.items : [];
+          schedules = Array.isArray(data.schedules) ? data.schedules : schedules;
+
           if(previousId){
             const found = items.findIndex(x => x.id === previousId);
             index = found >= 0 ? found : 0;
           }else{
             index = Math.min(index, Math.max(0, items.length - 1));
           }
-          render();
+
+          if(!activeScheduleId) render();
+          evaluateSchedule();
         }catch{
           status = "offline";
           showMessage("تعذر الاتصال باللابتوب", "سيحاول TvShow إعادة الاتصال تلقائيًا.");
         }
       }
 
+      async function loadSchedules(){
+        try{
+          const res = await fetch("/api/schedules", {cache:"no-store"});
+          const data = await res.json();
+          schedules = Array.isArray(data.schedules) ? data.schedules : [];
+          evaluateSchedule();
+        }catch{}
+      }
+
       function connectEvents(){
         if(eventSource) eventSource.close();
         eventSource = new EventSource("/api/events");
+
         eventSource.addEventListener("playlist", () => loadPlaylist(true));
+        eventSource.addEventListener("schedules", e => {
+          try{
+            const data = JSON.parse(e.data);
+            schedules = Array.isArray(data.schedules) ? data.schedules : [];
+            evaluateSchedule();
+          }catch{}
+        });
+
         eventSource.addEventListener("control", e => {
           let cmd = {};
           try{ cmd = JSON.parse(e.data); }catch{}
+          if(activeScheduleId && cmd.action !== "reload") return;
           if(cmd.action === "next") next();
           if(cmd.action === "previous") previous();
           if(cmd.action === "pause" && currentEl?.tagName === "VIDEO") currentEl.pause();
           if(cmd.action === "play" && currentEl?.tagName === "VIDEO") tryPlay(currentEl);
-          if(cmd.action === "reload") loadPlaylist(true);
+          if(cmd.action === "reload") {
+            loadPlaylist(true);
+            loadSchedules();
+          }
           if(cmd.action === "show"){
             const found = items.findIndex(x => x.id === cmd.id);
-            if(found >= 0){ index = found; render(); }
+            if(found >= 0){
+              index = found;
+              render();
+            }
           }
         });
-        eventSource.onerror = () => { status = "reconnecting"; };
+
+        eventSource.onerror = () => {
+          status = "reconnecting";
+        };
       }
 
       overlay.addEventListener("click", async () => {
@@ -165,22 +260,27 @@
         else overlay.style.display = "none";
       });
 
+      setInterval(evaluateSchedule, 1000);
+      setInterval(loadSchedules, 15000);
+
       setInterval(() => {
         const item = current();
         const position = currentEl?.tagName === "VIDEO" ? Number(currentEl.currentTime || 0) : 0;
+        const active = getActiveSchedule();
+
         fetch("/api/display/state", {
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({
-            currentId:item?.id || null,
-            currentName:item?.name || null,
+            currentId:active ? "schedule:" + active.id : (item?.id || null),
+            currentName:active ? (active.title || active.url) : (item?.name || null),
             status,
             position
           })
         }).catch(()=>{});
       }, 5000);
 
-      loadPlaylist(false);
+      Promise.all([loadPlaylist(false), loadSchedules()]);
       connectEvents();
     })();
   </script>
