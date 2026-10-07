@@ -31,6 +31,7 @@ let agentMeta = {
   imageDuration: 10
 };
 let playlist = [];
+let schedules = [];
 
 let displayState = {
   lastSeen: 0,
@@ -111,7 +112,8 @@ app.get("/api/status", (_req, res) => {
     displayOnline: isDisplayOnline(),
     agent: agentMeta,
     display: displayState,
-    itemCount: playlist.length
+    itemCount: playlist.length,
+    scheduleCount: schedules.length
   });
 });
 
@@ -120,8 +122,13 @@ app.get("/api/playlist", (_req, res) => {
     agentOnline: isAgentOnline(),
     items: playlist,
     mediaDir: agentMeta.mediaDir,
-    imageDuration: agentMeta.imageDuration
+    imageDuration: agentMeta.imageDuration,
+    schedules
   });
+});
+
+app.get("/api/schedules", (_req, res) => {
+  res.json({ schedules });
 });
 
 app.get("/api/events", (req, res) => {
@@ -187,6 +194,17 @@ app.post("/api/admin/image-duration", requirePin, async (req, res) => {
       duration: Number(req.body?.duration)
     });
     res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(err.message === "agent_offline" ? 503 : 502).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/schedules", requirePin, async (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.schedules) ? req.body.schedules : null;
+    if (!incoming) return res.status(400).json({ error: "invalid_schedules" });
+    const data = await sendAgentCommand("set-schedules", { schedules: incoming });
+    res.json({ ok: true, schedules: data.schedules || [] });
   } catch (err) {
     res.status(err.message === "agent_offline" ? 503 : 502).json({ error: err.message });
   }
@@ -367,8 +385,12 @@ wss.on("connection", ws => {
         if (Number.isFinite(Number(msg.settings.imageDuration))) {
           agentMeta.imageDuration = Number(msg.settings.imageDuration);
         }
+        if (Array.isArray(msg.settings.schedules)) {
+          schedules = msg.settings.schedules;
+        }
       }
       broadcast("playlist", { count: playlist.length, ts: Date.now() });
+      broadcast("schedules", { schedules, ts: Date.now() });
       return;
     }
 
