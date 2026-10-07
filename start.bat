@@ -1,24 +1,13 @@
 @echo off
 setlocal
-title TvShow Server
+title TvShow Laptop Agent
 cd /d "%~dp0"
 
 where node >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo [ERROR] Node.js is not installed or is not available in PATH.
-  echo Install Node.js 20 or newer, then run this file again.
-  echo https://nodejs.org/
-  echo.
-  pause
-  exit /b 1
-)
-
-where npm >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo [ERROR] npm was not found.
-  echo Reinstall Node.js and make sure "Add to PATH" is enabled.
+  echo [ERROR] Node.js is not installed.
+  echo Install Node.js 20 or newer from https://nodejs.org/
   echo.
   pause
   exit /b 1
@@ -30,26 +19,28 @@ if not exist node_modules (
   if errorlevel 1 (
     echo.
     echo [ERROR] npm install failed.
-    echo Check the Internet connection, then run start.bat again.
-    echo.
     pause
     exit /b 1
   )
 )
 
-echo.
-echo ==========================================
-echo TvShow is starting...
-echo Admin:   http://localhost:3000/admin
-echo Display: http://localhost:3000/display
-echo Default PIN: 2468
-echo ==========================================
-echo.
-
-start "" cmd /c "timeout /t 2 /nobreak >nul & start "" "http://localhost:3000/admin""
-
-call npm start
+if not exist agent-config.json (
+  copy /y agent-config.example.json agent-config.json >nul
+  echo.
+  echo TvShow created agent-config.json
+  echo Edit serverUrl and agentKey, then save the file.
+  echo.
+  start "" notepad "%~dp0agent-config.json"
+  pause
+  exit /b 0
+)
 
 echo.
-echo TvShow server stopped.
+echo Starting TvShow Laptop Agent...
+echo Keep this window open while the TV is using media from this laptop.
+echo.
+call npm run agent
+
+echo.
+echo TvShow Agent stopped.
 pause
