@@ -3,6 +3,7 @@ const path = require("path");
 const os = require("os");
 const { WebSocket } = require("ws");
 
+const AGENT_VERSION = "2.2.0";
 const ROOT = __dirname;
 const CONFIG_FILE = path.join(ROOT, "agent-config.json");
 const EXAMPLE_FILE = path.join(ROOT, "agent-config.example.json");
@@ -175,7 +176,7 @@ function toWebSocketUrl() {
   const base = config.serverUrl;
   if (!/^https?:\/\//i.test(base)) throw new Error("serverUrl must start with http:// or https://");
   const wsBase = base.replace(/^http:/i, "ws:").replace(/^https:/i, "wss:");
-  return `${wsBase}/agent?key=${encodeURIComponent(config.agentKey)}`;
+  return `${wsBase}/agent?key=${encodeURIComponent(config.agentKey)}&v=${encodeURIComponent(AGENT_VERSION)}`;
 }
 
 function parseRange(rangeHeader, size) {
@@ -426,6 +427,7 @@ function connect() {
   console.log("Server:", config.serverUrl);
   console.log("Media :", config.mediaDir);
   console.log("Node  :", process.version);
+  console.log("Agent :", AGENT_VERSION);
   console.log("==========================================");
   console.log("Connecting to TvShow server...");
   ws = new WebSocket(url, { handshakeTimeout: 15000 });
@@ -435,7 +437,7 @@ function connect() {
     send({
       type: "hello",
       hostname: os.hostname(),
-      version: "2.0.0"
+      version: AGENT_VERSION
     });
     lastSignature = "";
     sendPlaylist(true);
