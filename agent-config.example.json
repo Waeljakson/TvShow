@@ -1,0 +1,9 @@
+{
+  "serverUrl": "https://YOUR-TVSHOW-SERVER.onrender.com",
+  "agentKey": "CHANGE_THIS_AGENT_KEY",
+  "mediaDir": "D:\\TvShow\\Media",
+  "imageDuration": 10,
+  "order": [],
+  "imageDurations": {},
+  "reconnectSeconds": 5
+}
