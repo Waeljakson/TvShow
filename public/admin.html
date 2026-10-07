@@ -69,6 +69,28 @@
           </section>
 
           <section class="card stack">
+            <h2>جدولة رابط خارجي</h2>
+            <label>اسم العرض
+              <input id="scheduleTitle" type="text" placeholder="مثال: نتائج مباريات اليوم">
+            </label>
+            <label>رابط الشاشة
+              <input id="scheduleUrl" type="url" placeholder="https://example.com/live-results">
+            </label>
+            <div class="row">
+              <label style="flex:1;min-width:180px">وقت البداية
+                <input id="scheduleStart" type="datetime-local">
+              </label>
+              <label style="flex:1;min-width:180px">وقت النهاية
+                <input id="scheduleEnd" type="datetime-local">
+              </label>
+            </div>
+            <button id="addSchedule" class="btn primary" type="button">إضافة الموعد</button>
+            <div id="scheduleMsg" class="error"></div>
+            <div id="scheduleList" class="stack"></div>
+            <div class="notice">في وقت البداية ستتحول شاشة العرض تلقائيًا للرابط. عند وقت النهاية ترجع للفيديوهات والصور تلقائيًا.</div>
+          </section>
+
+          <section class="card stack">
             <h2>التحكم المباشر</h2>
             <div class="row">
               <button class="btn" data-command="previous" type="button">السابق</button>
@@ -100,6 +122,7 @@
       const qs = s => document.querySelector(s);
       let pin = sessionStorage.getItem("tvshowPin") || "";
       let items = [];
+      let schedules = [];
 
       async function api(url, options={}){
         const headers = {...(options.headers || {})};
@@ -195,6 +218,73 @@
         }catch{}
       }
 
+      async function loadSchedules(){
+        try{
+          const data = await api("/api/schedules");
+          schedules = Array.isArray(data.schedules) ? data.schedules : [];
+          renderSchedules();
+        }catch{}
+      }
+
+      function formatScheduleTime(value){
+        const d = new Date(value);
+        return Number.isFinite(d.getTime()) ? d.toLocaleString("ar-EG") : value;
+      }
+
+      function renderSchedules(){
+        const root = qs("#scheduleList");
+        root.innerHTML = "";
+        if(!schedules.length){
+          root.innerHTML = '<div class="muted">لا توجد مواعيد مجدولة.</div>';
+          return;
+        }
+
+        schedules.forEach(item => {
+          const box = document.createElement("div");
+          box.style.cssText = "border:1px solid var(--line);border-radius:10px;padding:12px;background:#101419";
+          const title = document.createElement("div");
+          title.style.fontWeight = "700";
+          title.textContent = item.title || "رابط مجدول";
+          const time = document.createElement("div");
+          time.className = "sub";
+          time.textContent = formatScheduleTime(item.start) + " ← " + formatScheduleTime(item.end);
+          const url = document.createElement("div");
+          url.className = "sub";
+          url.textContent = item.url;
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "btn";
+          del.style.marginTop = "9px";
+          del.textContent = "حذف الموعد";
+          del.addEventListener("click", async () => {
+            const next = schedules.filter(x => x.id !== item.id);
+            await saveSchedules(next);
+          });
+          box.append(title, time, url, del);
+          root.appendChild(box);
+        });
+      }
+
+      async function saveSchedules(next){
+        const msg = qs("#scheduleMsg");
+        msg.textContent = "";
+        try{
+          const data = await api("/api/admin/schedules", {
+            method:"POST",
+            body:JSON.stringify({schedules:next})
+          });
+          schedules = Array.isArray(data.schedules) ? data.schedules : next;
+          msg.style.color = "#7ee59d";
+          msg.textContent = "تم حفظ الجدول.";
+          renderSchedules();
+        }catch(err){
+          msg.style.color = "#ff9b9b";
+          msg.textContent = err.message === "agent_offline"
+            ? "اللابتوب غير متصل؛ شغّل TvShow Agent أولًا."
+            : "تعذر حفظ الموعد.";
+        }
+      }
+
       function renderPlaylist(){
         const root = qs("#playlist"); root.innerHTML = "";
         if(!items.length){
@@ -265,10 +355,48 @@
         }
       });
 
-      qs("#refresh").addEventListener("click", loadPlaylist);
-      async function loadAll(){ await Promise.all([loadStatus(), loadPlaylist()]); }
+      qs("#addSchedule").addEventListener("click", async () => {
+        const title = qs("#scheduleTitle").value.trim();
+        const url = qs("#scheduleUrl").value.trim();
+        const startRaw = qs("#scheduleStart").value;
+        const endRaw = qs("#scheduleEnd").value;
+        const msg = qs("#scheduleMsg");
+        msg.textContent = "";
+
+        let parsed;
+        try{ parsed = new URL(url); }catch{}
+        if(!parsed || !/^https?:$/.test(parsed.protocol)){
+          msg.textContent = "أدخل رابط http أو https صحيح.";
+          return;
+        }
+
+        const start = new Date(startRaw);
+        const end = new Date(endRaw);
+        if(!startRaw || !endRaw || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start){
+          msg.textContent = "حدد وقت بداية ونهاية صحيحين، والنهاية يجب أن تكون بعد البداية.";
+          return;
+        }
+
+        const item = {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2,8),
+          title: title || "رابط مجدول",
+          url,
+          start: start.toISOString(),
+          end: end.toISOString()
+        };
+
+        await saveSchedules([...schedules, item]);
+        qs("#scheduleTitle").value = "";
+        qs("#scheduleUrl").value = "";
+        qs("#scheduleStart").value = "";
+        qs("#scheduleEnd").value = "";
+      });
+
+      qs("#refresh").addEventListener("click", () => Promise.all([loadPlaylist(), loadSchedules()]));
+      async function loadAll(){ await Promise.all([loadStatus(), loadPlaylist(), loadSchedules()]); }
       setInterval(loadStatus, 5000);
       setInterval(loadPlaylist, 10000);
+      setInterval(loadSchedules, 15000);
       verify();
     })();
   </script>
