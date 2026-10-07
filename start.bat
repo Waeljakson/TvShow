@@ -13,15 +13,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist node_modules (
-  echo Installing TvShow dependencies...
-  call npm install
-  if errorlevel 1 (
-    echo.
-    echo [ERROR] npm install failed.
-    pause
-    exit /b 1
-  )
+where npm >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo [ERROR] npm was not found.
+  echo Reinstall Node.js and enable Add to PATH.
+  echo.
+  pause
+  exit /b 1
+)
+
+echo Checking TvShow dependencies...
+call npm install
+if errorlevel 1 (
+  echo.
+  echo [ERROR] npm install failed.
+  echo Check your Internet connection and try again.
+  echo.
+  pause
+  exit /b 1
 )
 
 if not exist agent-config.json (
@@ -38,15 +48,12 @@ if not exist agent-config.json (
     exit /b 1
   )
   set /p "MEDIADIR=Media folder path [D:\TvShow\Media]: "
-  if "%MEDIADIR%"=="" set "MEDIADIR=D:\TvShow\Media"
+  if not defined MEDIADIR set "MEDIADIR=D:\TvShow\Media"
 
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$o=[ordered]@{serverUrl='https://tvshow-ck1t.onrender.com';agentKey=$env:TVKEY;mediaDir=$env:MEDIADIR;imageDuration=10;order=@();imageDurations=@{};reconnectSeconds=5}; $o | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 'agent-config.json'" 2>nul
+  node -e "const fs=require('fs'); const o={serverUrl:'https://tvshow-ck1t.onrender.com',agentKey:process.env.TVKEY,mediaDir:process.env.MEDIADIR,imageDuration:10,order:[],imageDurations:{},reconnectSeconds:5}; fs.writeFileSync('agent-config.json',JSON.stringify(o,null,2),'utf8');"
   if errorlevel 1 (
     echo.
-    echo Could not create agent-config.json automatically.
-    echo Creating the template instead.
-    copy /y agent-config.example.json agent-config.json >nul
-    start "" notepad "%~dp0agent-config.json"
+    echo [ERROR] Could not create agent-config.json.
     pause
     exit /b 1
   )
@@ -59,6 +66,7 @@ echo Server: https://tvshow-ck1t.onrender.com
 echo Keep this window open while the TV is on.
 echo ==========================================
 echo.
+
 call npm run agent
 
 echo.
