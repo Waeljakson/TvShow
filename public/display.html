@@ -10,8 +10,18 @@
     html,body{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
     body{font-family:Tahoma,Arial,sans-serif;color:#fff}
     #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-    #stage video,#stage img,#stage iframe{width:100%;height:100%;background:#000;display:block;border:0}
-    #stage video,#stage img{object-fit:contain}
+    #stage video,#stage iframe{width:100%;height:100%;background:#000;display:block;border:0}
+    #stage video{object-fit:contain}
+    #stage img{
+      display:block;
+      width:auto;
+      height:auto;
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain;
+      object-position:center center;
+      background:#000;
+    }
     #message{max-width:720px;padding:32px;text-align:center;color:#e8e8e8;font-size:clamp(20px,3vw,42px);line-height:1.6}
     #message small{display:block;margin-top:14px;color:#888;font-size:.55em}
     #startOverlay{position:fixed;inset:0;border:0;background:rgba(0,0,0,.88);color:#fff;display:none;place-items:center;cursor:pointer;z-index:20}
